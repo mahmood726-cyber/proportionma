@@ -1,0 +1,1346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta property="og:title" content="ProportionMA — Proportion/Prevalence Meta-Analysis">
+<meta property="og:description" content="Browser-based proportion/prevalence meta-analysis with Freeman-Tukey, logit, raw transformations, DL/REML pooling, HKSJ adjustment, forest and funnel plots.">
+<title>ProportionMA — Proportion/Prevalence Meta-Analysis</title>
+<link rel="icon" href="data:,">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f1117;--surface:rgba(255,255,255,0.04);--glass:rgba(255,255,255,0.06);
+  --border:rgba(255,255,255,0.08);--text:#e2e8f0;--muted:#94a3b8;
+  --accent:#6366f1;--accent2:#818cf8;--red:#ef4444;--green:#22c55e;
+  --orange:#f59e0b;--cyan:#06b6d4;
+  --radius:12px;--shadow:0 8px 32px rgba(0,0,0,0.4);
+}
+html{font-size:14px}
+body{
+  font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
+  background:var(--bg);color:var(--text);
+  min-height:100vh;padding:1rem;
+}
+h1{font-size:1.6rem;font-weight:700;letter-spacing:-0.02em}
+h2{font-size:1.2rem;font-weight:600;margin-bottom:0.5rem;color:var(--accent2)}
+h3{font-size:1rem;font-weight:600;margin-bottom:0.4rem}
+
+.container{max-width:1400px;margin:0 auto}
+.header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:1rem 1.5rem;margin-bottom:1rem;
+  background:var(--glass);border:1px solid var(--border);
+  border-radius:var(--radius);backdrop-filter:blur(20px);
+}
+.header .subtitle{color:var(--muted);font-size:0.85rem}
+
+.panel{
+  background:var(--glass);border:1px solid var(--border);
+  border-radius:var(--radius);padding:1.2rem;margin-bottom:1rem;
+  backdrop-filter:blur(20px);box-shadow:var(--shadow);
+}
+
+.grid{display:grid;grid-template-columns:1fr 2fr;gap:1rem}
+@media(max-width:1000px){.grid{grid-template-columns:1fr}}
+
+label{font-size:0.85rem;color:var(--muted);display:block;margin-bottom:0.2rem}
+select,input,textarea{
+  width:100%;padding:0.5rem 0.7rem;border:1px solid var(--border);
+  border-radius:8px;background:rgba(0,0,0,0.3);color:var(--text);
+  font-size:0.9rem;font-family:inherit;
+}
+textarea{resize:vertical;min-height:180px;font-family:'Consolas','Courier New',monospace;font-size:0.82rem}
+select option{background:#1e1e2e}
+button{
+  padding:0.5rem 1rem;border:none;border-radius:8px;
+  font-size:0.85rem;font-weight:600;cursor:pointer;
+  transition:all 0.15s ease;
+}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:var(--accent2)}
+.btn-secondary{background:var(--surface);color:var(--text);border:1px solid var(--border)}
+.btn-secondary:hover{background:rgba(255,255,255,0.1)}
+.btn-danger{background:var(--red);color:#fff}
+.btn-sm{padding:0.3rem 0.6rem;font-size:0.8rem}
+
+.controls{display:flex;gap:0.5rem;flex-wrap:wrap;margin:0.5rem 0}
+
+.toggle-group{display:flex;align-items:center;gap:0.5rem;margin:0.3rem 0}
+.toggle{
+  position:relative;width:40px;height:22px;
+  background:rgba(255,255,255,0.1);border-radius:11px;
+  cursor:pointer;transition:background 0.2s;
+}
+.toggle.active{background:var(--accent)}
+.toggle::after{
+  content:'';position:absolute;top:2px;left:2px;
+  width:18px;height:18px;border-radius:50%;
+  background:#fff;transition:transform 0.2s;
+}
+.toggle.active::after{transform:translateX(18px)}
+
+.manual-rows{max-height:300px;overflow-y:auto;margin:0.5rem 0}
+.manual-row{
+  display:grid;grid-template-columns:2fr 1fr 1fr 1.5fr 30px;gap:0.3rem;
+  align-items:center;margin-bottom:0.3rem;
+}
+.manual-row input{padding:0.35rem 0.5rem;font-size:0.82rem}
+.remove-row{
+  background:none;border:none;color:var(--red);cursor:pointer;
+  font-size:1rem;padding:0;width:24px;height:24px;
+  display:flex;align-items:center;justify-content:center;
+}
+
+.error-msg{
+  background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);
+  color:#fca5a5;padding:0.6rem 0.8rem;border-radius:8px;margin:0.5rem 0;
+  font-size:0.85rem;display:none;
+}
+.error-msg.visible{display:block}
+
+.summary-table{width:100%;border-collapse:collapse;margin:0.5rem 0}
+.summary-table th,.summary-table td{
+  padding:0.4rem 0.6rem;text-align:left;
+  border-bottom:1px solid var(--border);font-size:0.85rem;
+}
+.summary-table th{color:var(--muted);font-weight:500}
+.summary-table td{font-family:'Consolas',monospace}
+
+.study-table{width:100%;border-collapse:collapse;margin:0.5rem 0}
+.study-table th,.study-table td{
+  padding:0.3rem 0.5rem;text-align:left;
+  border-bottom:1px solid var(--border);font-size:0.82rem;
+}
+.study-table th{color:var(--muted);font-weight:500;font-size:0.78rem}
+.study-table td{font-family:'Consolas',monospace}
+
+.plot-container{margin:0.5rem 0;overflow-x:auto}
+.plot-container svg{max-width:100%}
+
+.tab-bar{display:flex;gap:0.3rem;margin-bottom:0.8rem;flex-wrap:wrap}
+.tab-btn{
+  padding:0.4rem 0.8rem;border-radius:8px;font-size:0.82rem;
+  background:var(--surface);color:var(--muted);border:1px solid var(--border);
+  cursor:pointer;transition:all 0.15s;
+}
+.tab-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.tab-content{display:none}
+.tab-content.active{display:block}
+
+.badge{
+  display:inline-block;padding:0.15rem 0.5rem;border-radius:6px;
+  font-size:0.75rem;font-weight:600;
+}
+.badge-info{background:rgba(99,102,241,0.2);color:var(--accent2)}
+.badge-warn{background:rgba(245,158,11,0.2);color:var(--orange)}
+
+#inputMode{margin-bottom:0.5rem}
+.input-mode-tabs{display:flex;gap:0.3rem;margin-bottom:0.6rem}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div>
+      <h1>ProportionMA</h1>
+      <div class="subtitle">Proportion / Prevalence Meta-Analysis</div>
+    </div>
+    <div style="display:flex;gap:0.5rem">
+      <button class="btn-secondary btn-sm" onclick="exportCSV()">Export CSV</button>
+      <button class="btn-secondary btn-sm" onclick="exportForestSVG()">Export Forest SVG</button>
+    </div>
+  </div>
+
+  <div class="grid">
+    <!-- LEFT: Input Panel -->
+    <div>
+      <div class="panel">
+        <h2>Study Data</h2>
+        <div class="input-mode-tabs">
+          <button class="tab-btn active" onclick="switchInputMode('csv')" id="csvModeBtn">CSV Paste</button>
+          <button class="tab-btn" onclick="switchInputMode('manual')" id="manualModeBtn">Manual Entry</button>
+        </div>
+
+        <div id="csvInput">
+          <label for="csvData">Paste CSV (Study, Events, Total, [Subgroup])</label>
+          <textarea id="csvData" placeholder="Study,Events,Total,Subgroup
+Smith 2020,15,100,Group A
+Jones 2021,22,150,Group A
+Lee 2019,8,50,Group B
+..."></textarea>
+        </div>
+
+        <div id="manualInput" style="display:none">
+          <div class="manual-row" style="margin-bottom:0.4rem">
+            <label style="margin:0">Study</label>
+            <label style="margin:0">Events</label>
+            <label style="margin:0">Total</label>
+            <label style="margin:0">Subgroup</label>
+            <span></span>
+          </div>
+          <div class="manual-rows" id="manualRows"></div>
+          <button class="btn-secondary btn-sm" onclick="addManualRow()">+ Add Study</button>
+        </div>
+
+        <div class="controls" style="margin-top:0.6rem">
+          <button class="btn-secondary btn-sm" onclick="loadDemoData()">Demo Data</button>
+          <button class="btn-secondary btn-sm" onclick="loadDemoSubgroup()">Demo Subgroup</button>
+          <button class="btn-secondary btn-sm" onclick="clearAll()">Clear</button>
+        </div>
+
+        <div id="errorMsg" class="error-msg"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Settings</h2>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem">
+          <div>
+            <label for="transform">Transformation</label>
+            <select id="transform">
+              <option value="FT" selected>Freeman-Tukey double arcsine</option>
+              <option value="logit">Logit</option>
+              <option value="raw">Raw proportion</option>
+            </select>
+          </div>
+          <div>
+            <label for="method">Method</label>
+            <select id="method">
+              <option value="DL" selected>DerSimonian-Laird</option>
+              <option value="REML">REML</option>
+            </select>
+          </div>
+        </div>
+        <div style="margin-top:0.6rem">
+          <div class="toggle-group">
+            <div class="toggle" id="hksjToggle" onclick="toggleHKSJ()"></div>
+            <span>HKSJ adjustment</span>
+            <span class="badge badge-info" style="font-size:0.7rem">t-distribution</span>
+          </div>
+          <div class="toggle-group">
+            <div class="toggle" id="piToggle" onclick="togglePI()"></div>
+            <span>Prediction interval</span>
+          </div>
+        </div>
+        <div style="margin-top:0.8rem">
+          <button class="btn-primary" onclick="runAnalysis()" style="width:100%">Analyze</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Results Panel -->
+    <div>
+      <div class="panel" id="resultsPanel" style="display:none">
+        <div class="tab-bar">
+          <button class="tab-btn active" onclick="switchTab('forest')" data-tab="forest">Forest Plot</button>
+          <button class="tab-btn" onclick="switchTab('summary')" data-tab="summary">Summary</button>
+          <button class="tab-btn" onclick="switchTab('funnel')" data-tab="funnel">Funnel Plot</button>
+          <button class="tab-btn" onclick="switchTab('subgroup')" data-tab="subgroup" id="subgroupTab" style="display:none">Subgroups</button>
+        </div>
+
+        <div class="tab-content active" id="tab-forest">
+          <div class="plot-container" id="forestPlot"></div>
+        </div>
+        <div class="tab-content" id="tab-summary">
+          <div id="summaryContent"></div>
+        </div>
+        <div class="tab-content" id="tab-funnel">
+          <div class="plot-container" id="funnelPlot"></div>
+        </div>
+        <div class="tab-content" id="tab-subgroup">
+          <div id="subgroupContent"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// ProportionMA — Statistical Engine
+// ============================================================
+
+// --- State ---
+let useHKSJ = false;
+let usePI = false;
+let lastResults = null;
+
+// --- UI helpers ---
+function toggleHKSJ() {
+  useHKSJ = !useHKSJ;
+  document.getElementById('hksjToggle').classList.toggle('active', useHKSJ);
+}
+function togglePI() {
+  usePI = !usePI;
+  document.getElementById('piToggle').classList.toggle('active', usePI);
+}
+
+function switchInputMode(mode) {
+  document.getElementById('csvInput').style.display = mode === 'csv' ? '' : 'none';
+  document.getElementById('manualInput').style.display = mode === 'manual' ? '' : 'none';
+  document.getElementById('csvModeBtn').classList.toggle('active', mode === 'csv');
+  document.getElementById('manualModeBtn').classList.toggle('active', mode === 'manual');
+}
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.querySelector(`[data-tab="${tab}"]`).classList.add('active');
+  document.getElementById(`tab-${tab}`).classList.add('active');
+}
+
+function showError(msg) {
+  const el = document.getElementById('errorMsg');
+  el.textContent = msg;
+  el.classList.add('visible');
+}
+function hideError() {
+  document.getElementById('errorMsg').classList.remove('visible');
+}
+
+function addManualRow(study, events, total, subgroup) {
+  const container = document.getElementById('manualRows');
+  const row = document.createElement('div');
+  row.className = 'manual-row';
+  row.innerHTML = `
+    <input type="text" value="${study || ''}" placeholder="Study name">
+    <input type="number" value="${events !== undefined ? events : ''}" placeholder="Events" min="0">
+    <input type="number" value="${total !== undefined ? total : ''}" placeholder="Total" min="1">
+    <input type="text" value="${subgroup || ''}" placeholder="(optional)">
+    <button class="remove-row" onclick="this.parentElement.remove()">&times;</button>
+  `;
+  container.appendChild(row);
+}
+
+function clearAll() {
+  document.getElementById('csvData').value = '';
+  document.getElementById('manualRows').innerHTML = '';
+  document.getElementById('resultsPanel').style.display = 'none';
+  hideError();
+  lastResults = null;
+}
+
+function loadDemoData() {
+  const csv = `Study,Events,Total
+Smith 2020,15,100
+Jones 2021,22,150
+Lee 2019,8,50
+Brown 2022,30,200
+Davis 2018,12,80
+Wilson 2023,5,40
+Taylor 2020,18,120
+Clark 2021,25,160`;
+  document.getElementById('csvData').value = csv;
+  switchInputMode('csv');
+  hideError();
+}
+
+function loadDemoSubgroup() {
+  const csv = `Study,Events,Total,Subgroup
+Smith 2020,15,100,Urban
+Jones 2021,22,150,Urban
+Lee 2019,8,50,Urban
+Brown 2022,30,200,Urban
+Davis 2018,12,80,Rural
+Wilson 2023,5,40,Rural
+Taylor 2020,18,120,Rural
+Clark 2021,25,160,Rural`;
+  document.getElementById('csvData').value = csv;
+  switchInputMode('csv');
+  hideError();
+}
+
+// --- Parse Input ---
+function parseInput() {
+  const csvMode = document.getElementById('csvInput').style.display !== 'none';
+  const studies = [];
+
+  if (csvMode) {
+    const text = document.getElementById('csvData').value.trim();
+    if (!text) return { error: 'No data entered. Paste CSV data or use Demo Data button.' };
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+    if (lines.length < 2) return { error: 'Need at least a header row and one data row.' };
+
+    // parse header
+    const header = lines[0].split(',').map(h => h.trim().toLowerCase());
+    const iStudy = header.findIndex(h => h.includes('study') || h.includes('name') || h.includes('author'));
+    const iEvents = header.findIndex(h => h.includes('event') || h.includes('cases') || h === 'x' || h === 'r');
+    const iTotal = header.findIndex(h => h.includes('total') || h === 'n' || h.includes('sample'));
+    const iSubgroup = header.findIndex(h => h.includes('subgroup') || h.includes('group'));
+
+    if (iEvents === -1 || iTotal === -1) {
+      return { error: 'CSV must have Events and Total columns. Header not recognized.' };
+    }
+
+    for (let i = 1; i < lines.length; i++) {
+      const cols = lines[i].split(',').map(c => c.trim());
+      const study = iStudy >= 0 ? cols[iStudy] : `Study ${i}`;
+      const events = parseInt(cols[iEvents], 10);
+      const total = parseInt(cols[iTotal], 10);
+      const subgroup = iSubgroup >= 0 ? (cols[iSubgroup] || '') : '';
+
+      if (isNaN(events) || isNaN(total)) {
+        return { error: `Row ${i + 1}: Events and Total must be numbers.` };
+      }
+      if (events < 0) {
+        return { error: `Row ${i + 1}: Events cannot be negative.` };
+      }
+      if (total <= 0) {
+        return { error: `Row ${i + 1}: Total must be positive.` };
+      }
+      if (events > total) {
+        return { error: `Row ${i + 1}: Events (${events}) cannot exceed Total (${total}).` };
+      }
+      studies.push({ study, events, total, subgroup });
+    }
+  } else {
+    const rows = document.getElementById('manualRows').querySelectorAll('.manual-row');
+    if (rows.length === 0) return { error: 'No studies entered. Add at least one study.' };
+    rows.forEach((row, idx) => {
+      const inputs = row.querySelectorAll('input');
+      const study = inputs[0].value.trim() || `Study ${idx + 1}`;
+      const events = parseInt(inputs[1].value, 10);
+      const total = parseInt(inputs[2].value, 10);
+      const subgroup = inputs[3].value.trim();
+
+      if (isNaN(events) || isNaN(total)) {
+        studies.push({ error: `Row ${idx + 1}: Events and Total must be numbers.` });
+        return;
+      }
+      if (events < 0) {
+        studies.push({ error: `Row ${idx + 1}: Events cannot be negative.` });
+        return;
+      }
+      if (total <= 0) {
+        studies.push({ error: `Row ${idx + 1}: Total must be positive.` });
+        return;
+      }
+      if (events > total) {
+        studies.push({ error: `Row ${idx + 1}: Events (${events}) cannot exceed Total (${total}).` });
+        return;
+      }
+      studies.push({ study, events, total, subgroup });
+    });
+    const errRow = studies.find(s => s.error);
+    if (errRow) return { error: errRow.error };
+  }
+
+  if (studies.length === 0) return { error: 'No valid studies found.' };
+  return { studies };
+}
+
+// ============================================================
+// MATH UTILITIES
+// ============================================================
+
+// --- t-distribution quantile (two-tailed) via approximation ---
+// Hill's algorithm for inverse t-distribution
+function qt(p, df) {
+  // Returns quantile for probability p and degrees of freedom df
+  // For meta-analysis we need qt(alpha/2, df) which is negative
+  if (df <= 0) return NaN;
+  if (df === 1) return Math.tan(Math.PI * (p - 0.5));
+  if (df === 2) return (2 * p - 1) / Math.sqrt(2 * p * (1 - p));
+
+  // Use Abramowitz & Stegun rational approximation via normal approx + correction
+  const a = 1 / (df - 0.5);
+  const b = 48 / (a * a);
+  let z = qnorm(p);
+  const y = z * z;
+
+  // Cornish-Fisher expansion
+  let x = z * (1 + (y - 3) / (4 * df) +
+    ((5 * y * y - 56 * y + 75) / (96 * df * df)) +
+    ((-3 * y * y * y + 105 * y * y - 735 * y + 945) / (384 * df * df * df)));
+
+  // Newton-Raphson refinement
+  for (let iter = 0; iter < 5; iter++) {
+    const tp = tCDF(x, df) - p;
+    const td = tPDF(x, df);
+    if (Math.abs(td) < 1e-20) break;
+    x = x - tp / td;
+  }
+  return x;
+}
+
+function qnorm(p) {
+  // Rational approximation for the standard normal inverse CDF
+  if (p <= 0) return -Infinity;
+  if (p >= 1) return Infinity;
+  if (p === 0.5) return 0;
+
+  const a = [
+    -3.969683028665376e+01, 2.209460984245205e+02,
+    -2.759285104469687e+02, 1.383577518672690e+02,
+    -3.066479806614716e+01, 2.506628277459239e+00
+  ];
+  const b = [
+    -5.447609879822406e+01, 1.615858368580409e+02,
+    -1.556989798598866e+02, 6.680131188771972e+01,
+    -1.328068155288572e+01
+  ];
+  const c = [
+    -7.784894002430293e-03, -3.223964580411365e-01,
+    -2.400758277161838e+00, -2.549732539343734e+00,
+     4.374664141464968e+00, 2.938163982698783e+00
+  ];
+  const d = [
+    7.784695709041462e-03, 3.224671290700398e-01,
+    2.445134137142996e+00, 3.754408661907416e+00
+  ];
+
+  const pLow = 0.02425;
+  const pHigh = 1 - pLow;
+  let q, r;
+
+  if (p < pLow) {
+    q = Math.sqrt(-2 * Math.log(p));
+    return (((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5]) /
+           ((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);
+  } else if (p <= pHigh) {
+    q = p - 0.5;
+    r = q * q;
+    return (((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5])*q /
+           (((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1);
+  } else {
+    q = Math.sqrt(-2 * Math.log(1 - p));
+    return -(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5]) /
+            ((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);
+  }
+}
+
+function tPDF(x, df) {
+  const lnCoeff = lnGamma((df + 1) / 2) - lnGamma(df / 2) - 0.5 * Math.log(df * Math.PI);
+  return Math.exp(lnCoeff - ((df + 1) / 2) * Math.log(1 + x * x / df));
+}
+
+function tCDF(x, df) {
+  // Regularized incomplete beta function approach
+  if (x === 0) return 0.5;
+  const t2 = x * x;
+  const ib = regIncBeta(df / 2, 0.5, df / (df + t2));
+  return x > 0 ? 1 - 0.5 * ib : 0.5 * ib;
+}
+
+// --- Chi-squared CDF ---
+function chiSqCDF(x, df) {
+  if (x <= 0) return 0;
+  return regGammaP(df / 2, x / 2);
+}
+
+// --- Log Gamma (Stirling) ---
+function lnGamma(x) {
+  if (x <= 0) return Infinity;
+  // Lanczos approximation
+  const g = 7;
+  const coef = [
+    0.99999999999980993, 676.5203681218851, -1259.1392167224028,
+    771.32342877765313, -176.61502916214059, 12.507343278686905,
+    -0.13857109526572012, 9.9843695780195716e-6, 1.5056327351493116e-7
+  ];
+  if (x < 0.5) {
+    return Math.log(Math.PI / Math.sin(Math.PI * x)) - lnGamma(1 - x);
+  }
+  x -= 1;
+  let a = coef[0];
+  const t = x + g + 0.5;
+  for (let i = 1; i < coef.length; i++) {
+    a += coef[i] / (x + i);
+  }
+  return 0.5 * Math.log(2 * Math.PI) + (x + 0.5) * Math.log(t) - t + Math.log(a);
+}
+
+function gamma(x) { return Math.exp(lnGamma(x)); }
+
+// --- Regularized incomplete beta function ---
+function regIncBeta(a, b, x) {
+  if (x <= 0) return 0;
+  if (x >= 1) return 1;
+
+  // Use symmetry relation for better convergence
+  if (x > (a + 1) / (a + b + 2)) {
+    return 1 - regIncBeta(b, a, 1 - x);
+  }
+
+  const lnBeta = lnGamma(a) + lnGamma(b) - lnGamma(a + b);
+  const front = Math.exp(Math.log(x) * a + Math.log(1 - x) * b - lnBeta) / a;
+
+  // Lentz's continued fraction
+  let f = 1, c = 1, d = 1 - (a + b) * x / (a + 1);
+  if (Math.abs(d) < 1e-30) d = 1e-30;
+  d = 1 / d;
+  f = d;
+
+  for (let m = 1; m <= 200; m++) {
+    // even step
+    let numerator = m * (b - m) * x / ((a + 2 * m - 1) * (a + 2 * m));
+    d = 1 + numerator * d;
+    if (Math.abs(d) < 1e-30) d = 1e-30;
+    c = 1 + numerator / c;
+    if (Math.abs(c) < 1e-30) c = 1e-30;
+    d = 1 / d;
+    f *= c * d;
+
+    // odd step
+    numerator = -(a + m) * (a + b + m) * x / ((a + 2 * m) * (a + 2 * m + 1));
+    d = 1 + numerator * d;
+    if (Math.abs(d) < 1e-30) d = 1e-30;
+    c = 1 + numerator / c;
+    if (Math.abs(c) < 1e-30) c = 1e-30;
+    d = 1 / d;
+    const delta = c * d;
+    f *= delta;
+    if (Math.abs(delta - 1) < 1e-12) break;
+  }
+
+  return front * f;
+}
+
+// --- Beta quantile (inverse CDF) via bisection + Newton ---
+function qbeta(p, a, b) {
+  if (p <= 0) return 0;
+  if (p >= 1) return 1;
+  if (a <= 0 || b <= 0) return NaN;
+
+  // Initial guess using normal approximation
+  let x = 0.5;
+  // Better initial guess
+  const mu = a / (a + b);
+  x = Math.max(0.001, Math.min(0.999, mu));
+
+  // Newton-Raphson
+  for (let iter = 0; iter < 100; iter++) {
+    const fx = regIncBeta(a, b, x) - p;
+    if (Math.abs(fx) < 1e-12) break;
+
+    // Beta PDF
+    const lnBeta = lnGamma(a) + lnGamma(b) - lnGamma(a + b);
+    const pdf = Math.exp((a - 1) * Math.log(Math.max(x, 1e-300)) + (b - 1) * Math.log(Math.max(1 - x, 1e-300)) - lnBeta);
+
+    if (pdf < 1e-20) {
+      // Bisection fallback
+      if (fx < 0) x = x + (1 - x) / 2;
+      else x = x / 2;
+    } else {
+      let step = fx / pdf;
+      // Clamp step
+      if (x - step <= 0) step = x * 0.9;
+      if (x - step >= 1) step = -(1 - x) * 0.9;
+      x = x - step;
+      x = Math.max(1e-15, Math.min(1 - 1e-15, x));
+    }
+  }
+  return x;
+}
+
+// --- Regularized lower incomplete gamma (for chi-sq CDF) ---
+function regGammaP(a, x) {
+  if (x <= 0) return 0;
+  if (x < a + 1) {
+    // Series expansion
+    let sum = 1 / a, term = 1 / a;
+    for (let n = 1; n < 200; n++) {
+      term *= x / (a + n);
+      sum += term;
+      if (Math.abs(term) < Math.abs(sum) * 1e-12) break;
+    }
+    return sum * Math.exp(-x + a * Math.log(x) - lnGamma(a));
+  } else {
+    // Continued fraction
+    return 1 - regGammaQ(a, x);
+  }
+}
+
+function regGammaQ(a, x) {
+  // Continued fraction for upper incomplete gamma
+  let f = 1, c = 1, d = x + 1 - a;
+  if (Math.abs(d) < 1e-30) d = 1e-30;
+  d = 1 / d;
+  f = d;
+
+  for (let i = 1; i <= 200; i++) {
+    const an = i * (a - i);
+    const bn = x + 2 * i + 1 - a;
+    d = bn + an * d;
+    if (Math.abs(d) < 1e-30) d = 1e-30;
+    c = bn + an / c;
+    if (Math.abs(c) < 1e-30) c = 1e-30;
+    d = 1 / d;
+    const delta = c * d;
+    f *= delta;
+    if (Math.abs(delta - 1) < 1e-12) break;
+  }
+
+  return Math.exp(-x + a * Math.log(x) - lnGamma(a)) * f;
+}
+
+
+// ============================================================
+// TRANSFORMATIONS
+// ============================================================
+
+function transformStudies(studies, method) {
+  // Check if any zero cell exists
+  const hasZero = studies.some(s => s.events === 0 || s.events === s.total);
+  const corrected = studies.map(s => {
+    let x = s.events, n = s.total;
+    if (hasZero) {
+      x = x + 0.5;
+      n = n + 1;
+    }
+    return { ...s, x_corr: x, n_corr: n };
+  });
+
+  return corrected.map(s => {
+    const x = s.x_corr;
+    const n = s.n_corr;
+    const p = x / n;
+    let yi, vi;
+
+    if (method === 'FT') {
+      // Freeman-Tukey double arcsine
+      // Use original n for the transformation (not corrected), but corrected x
+      const nOrig = hasZero ? s.total + 1 : s.total;
+      yi = Math.asin(Math.sqrt(x / (nOrig + 1))) + Math.asin(Math.sqrt((x + 1) / (nOrig + 1)));
+      vi = 1 / (nOrig + 0.5);
+    } else if (method === 'logit') {
+      const pClamped = Math.max(1e-10, Math.min(1 - 1e-10, p));
+      yi = Math.log(pClamped / (1 - pClamped));
+      vi = 1 / (n * pClamped * (1 - pClamped));
+    } else {
+      // raw
+      yi = p;
+      vi = p * (1 - p) / n;
+      if (vi < 1e-20) vi = 1e-10; // avoid zero variance
+    }
+
+    return { ...s, yi, vi };
+  });
+}
+
+// ============================================================
+// POOLING
+// ============================================================
+
+function poolDL(transformed) {
+  const k = transformed.length;
+  if (k === 0) return null;
+
+  const w = transformed.map(s => 1 / s.vi);
+  const sumW = w.reduce((a, b) => a + b, 0);
+  const yBar = w.reduce((s, wi, i) => s + wi * transformed[i].yi, 0) / sumW;
+
+  if (k === 1) {
+    return {
+      mu: yBar, tau2: 0, se: Math.sqrt(transformed[0].vi),
+      Q: 0, I2: 0, Qp: 1, k: 1, w, weights: [100]
+    };
+  }
+
+  // Q statistic
+  const Q = w.reduce((s, wi, i) => s + wi * Math.pow(transformed[i].yi - yBar, 2), 0);
+  const df = k - 1;
+  const C = sumW - w.reduce((s, wi) => s + wi * wi, 0) / sumW;
+  let tau2 = Math.max(0, (Q - df) / C);
+
+  // RE weights
+  const wStar = transformed.map(s => 1 / (s.vi + tau2));
+  const sumWStar = wStar.reduce((a, b) => a + b, 0);
+  const mu = wStar.reduce((s, wi, i) => s + wi * transformed[i].yi, 0) / sumWStar;
+  const se = Math.sqrt(1 / sumWStar);
+
+  const I2 = Math.max(0, (Q - df) / Q) * 100;
+  const Qp = 1 - chiSqCDF(Q, df);
+
+  const totalW = wStar.reduce((a, b) => a + b, 0);
+  const weights = wStar.map(wi => (wi / totalW) * 100);
+
+  return { mu, tau2, se, Q, I2, Qp, k, w: wStar, weights };
+}
+
+function poolREML(transformed) {
+  const k = transformed.length;
+  if (k === 0) return null;
+  if (k === 1) return poolDL(transformed);
+
+  // Start from DL estimate
+  const dlResult = poolDL(transformed);
+  let tau2 = dlResult.tau2;
+
+  // Fisher scoring iterations
+  for (let iter = 0; iter < 100; iter++) {
+    const wStar = transformed.map(s => 1 / (s.vi + tau2));
+    const sumW = wStar.reduce((a, b) => a + b, 0);
+    const mu = wStar.reduce((s, wi, i) => s + wi * transformed[i].yi, 0) / sumW;
+
+    // First derivative of REML log-likelihood
+    const dl = -0.5 * wStar.reduce((s, wi) => s + wi * wi / (wi), 0) / sumW +
+      0.5 * wStar.reduce((s, wi, i) => {
+        const r = transformed[i].yi - mu;
+        return s + wi * wi * r * r;
+      }, 0) / (sumW * sumW) * sumW;
+
+    // Simplified: gradient and info
+    let gradient = 0, info = 0;
+    const wk = transformed.map(s => 1 / (s.vi + tau2));
+    const sumWk = wk.reduce((a, b) => a + b, 0);
+    const muK = wk.reduce((s, wi, i) => s + wi * transformed[i].yi, 0) / sumWk;
+
+    for (let i = 0; i < k; i++) {
+      const wi = wk[i];
+      const ri = transformed[i].yi - muK;
+      gradient += -wi * wi * (1 / wi - ri * ri);
+      info += wi * wi;
+    }
+    gradient = -0.5 * (wk.reduce((s, wi) => s - wi, 0) + wk.reduce((s, wi, i) => {
+      const r = transformed[i].yi - muK;
+      return s + wi * wi * r * r;
+    }, 0));
+
+    // Actual REML score equation
+    let score = 0;
+    let fisher = 0;
+    for (let i = 0; i < k; i++) {
+      const wi2 = wk[i] * wk[i];
+      score += wi2 * ((transformed[i].yi - muK) * (transformed[i].yi - muK) - (1 / wk[i])) +
+        wi2 / sumWk;
+    }
+    score *= 0.5;
+
+    for (let i = 0; i < k; i++) {
+      fisher += wk[i] * wk[i];
+    }
+    fisher = 0.5 * (fisher - wk.reduce((s, wi) => s + wi * wi, 0) * wk.reduce((s, wi) => s + wi * wi, 0) / (sumWk * sumWk));
+
+    // Simplified REML update: Paule-Mandel style iteration
+    const Qk = wk.reduce((s, wi, i) => s + wi * (transformed[i].yi - muK) * (transformed[i].yi - muK), 0);
+    const sumW2overW = wk.reduce((s, wi) => s + wi * wi, 0) / sumWk;
+    const newTau2 = Math.max(0, tau2 + (Qk - (k - 1)) / (sumWk - sumW2overW));
+
+    if (Math.abs(newTau2 - tau2) < 1e-8) {
+      tau2 = newTau2;
+      break;
+    }
+    tau2 = newTau2;
+  }
+
+  // Final estimates
+  const wStar = transformed.map(s => 1 / (s.vi + tau2));
+  const sumWStar = wStar.reduce((a, b) => a + b, 0);
+  const mu = wStar.reduce((s, wi, i) => s + wi * transformed[i].yi, 0) / sumWStar;
+  const se = Math.sqrt(1 / sumWStar);
+
+  // Q using FE weights for heterogeneity test
+  const wFE = transformed.map(s => 1 / s.vi);
+  const sumWFE = wFE.reduce((a, b) => a + b, 0);
+  const muFE = wFE.reduce((s, wi, i) => s + wi * transformed[i].yi, 0) / sumWFE;
+  const Q = wFE.reduce((s, wi, i) => s + wi * Math.pow(transformed[i].yi - muFE, 2), 0);
+  const df = k - 1;
+  const I2 = Math.max(0, (Q - df) / Q) * 100;
+  const Qp = 1 - chiSqCDF(Q, df);
+
+  const totalW = wStar.reduce((a, b) => a + b, 0);
+  const weights = wStar.map(wi => (wi / totalW) * 100);
+
+  return { mu, tau2, se, Q, I2, Qp, k, w: wStar, weights };
+}
+
+// ============================================================
+// BACK-TRANSFORMATION
+// ============================================================
+
+function backTransform(y, method, nHarm) {
+  if (method === 'FT') {
+    // Miller (1978) back-transformation using harmonic mean of denominators
+    const sinVal = Math.sin(y / 2);
+    let p = sinVal * sinVal;
+    // Miller correction
+    if (nHarm > 0) {
+      p = p - (1 / nHarm) * (p * (1 - p) - y / (4 * nHarm));
+    }
+    return Math.max(0, Math.min(1, p));
+  } else if (method === 'logit') {
+    return 1 / (1 + Math.exp(-y));
+  } else {
+    return Math.max(0, Math.min(1, y));
+  }
+}
+
+function harmonicMean(arr) {
+  if (arr.length === 0) return 0;
+  const sumInv = arr.reduce((s, n) => s + 1 / n, 0);
+  return arr.length / sumInv;
+}
+
+// ============================================================
+// CLOPPER-PEARSON EXACT CI
+// ============================================================
+
+function clopperPearsonCI(x, n, alpha) {
+  if (n <= 0) return { lower: 0, upper: 1 };
+  let lower, upper;
+
+  if (x === 0) {
+    lower = 0;
+    upper = qbeta(1 - alpha / 2, x + 1, n - x);
+  } else if (x === n) {
+    lower = qbeta(alpha / 2, x, n - x + 1);
+    upper = 1;
+  } else {
+    lower = qbeta(alpha / 2, x, n - x + 1);
+    upper = qbeta(1 - alpha / 2, x + 1, n - x);
+  }
+
+  return {
+    lower: Math.max(0, lower),
+    upper: Math.min(1, upper)
+  };
+}
+
+// ============================================================
+// MAIN ANALYSIS
+// ============================================================
+
+function runAnalysis() {
+  hideError();
+  const parsed = parseInput();
+  if (parsed.error) {
+    showError(parsed.error);
+    return;
+  }
+
+  const studies = parsed.studies;
+  const transformMethod = document.getElementById('transform').value;
+  const poolMethod = document.getElementById('method').value;
+  const alpha = 0.05;
+
+  // Transform
+  const transformed = transformStudies(studies, transformMethod);
+
+  // Pool
+  const result = poolMethod === 'REML' ? poolREML(transformed) : poolDL(transformed);
+  if (!result) {
+    showError('Pooling failed.');
+    return;
+  }
+
+  // HKSJ adjustment
+  let ciMultiplier, ciDf;
+  if (useHKSJ && result.k > 1) {
+    ciDf = result.k - 1;
+    const tVal = Math.abs(qt(alpha / 2, ciDf));
+    const qAdj = Math.sqrt(Math.max(1, result.Q / (result.k - 1)));
+    ciMultiplier = tVal * qAdj;
+    // Adjust SE by the HKSJ factor
+    // HKSJ SE = sqrt(1/k * sum(w_i * (y_i - mu)^2 / (k-1)))
+    // But simpler: multiply standard CI half-width
+  } else {
+    ciMultiplier = Math.abs(qnorm(alpha / 2));
+    ciDf = Infinity;
+  }
+
+  const ciLower = result.mu - ciMultiplier * result.se;
+  const ciUpper = result.mu + ciMultiplier * result.se;
+
+  // Prediction interval
+  let piLower = null, piUpper = null, piMessage = '';
+  if (usePI) {
+    if (result.k < 3) {
+      piMessage = 'Prediction interval undefined for k < 3';
+    } else {
+      const piDf = result.k - 2; // t_{k-2}
+      const tPI = Math.abs(qt(alpha / 2, piDf));
+      const piSE = Math.sqrt(result.se * result.se + result.tau2);
+      piLower = result.mu - tPI * piSE;
+      piUpper = result.mu + tPI * piSE;
+    }
+  }
+
+  // Harmonic mean of sample sizes for FT back-transformation
+  const hasZero = studies.some(s => s.events === 0 || s.events === s.total);
+  const denoms = studies.map(s => hasZero ? s.total + 1 : s.total);
+  const nHarm = harmonicMean(denoms);
+
+  // Back-transform pooled estimate and CI
+  const pooledProp = backTransform(result.mu, transformMethod, nHarm);
+  const pooledCILower = backTransform(ciLower, transformMethod, nHarm);
+  const pooledCIUpper = backTransform(ciUpper, transformMethod, nHarm);
+
+  let piPropLower = null, piPropUpper = null;
+  if (piLower !== null) {
+    piPropLower = backTransform(piLower, transformMethod, nHarm);
+    piPropUpper = backTransform(piUpper, transformMethod, nHarm);
+  }
+
+  // Per-study CIs (Clopper-Pearson)
+  const studyResults = studies.map((s, i) => {
+    const cp = clopperPearsonCI(s.events, s.total, alpha);
+    return {
+      ...s,
+      proportion: s.events / s.total,
+      ciLower: cp.lower,
+      ciUpper: cp.upper,
+      weight: result.weights[i],
+      yi: transformed[i].yi,
+      vi: transformed[i].vi,
+      se: Math.sqrt(transformed[i].vi)
+    };
+  });
+
+  // Subgroup analysis
+  let subgroupResults = null;
+  const subgroups = [...new Set(studies.map(s => s.subgroup).filter(s => s))];
+  if (subgroups.length >= 2) {
+    subgroupResults = {};
+    subgroups.forEach(sg => {
+      const sgStudies = studies.filter(s => s.subgroup === sg);
+      const sgTransformed = transformStudies(sgStudies, transformMethod);
+      const sgResult = poolMethod === 'REML' ? poolREML(sgTransformed) : poolDL(sgTransformed);
+      const sgDenoms = sgStudies.map(s => hasZero ? s.total + 1 : s.total);
+      const sgNHarm = harmonicMean(sgDenoms);
+
+      let sgCIMultiplier;
+      if (useHKSJ && sgResult.k > 1) {
+        const tVal = Math.abs(qt(alpha / 2, sgResult.k - 1));
+        sgCIMultiplier = tVal * Math.sqrt(Math.max(1, sgResult.Q / (sgResult.k - 1)));
+      } else {
+        sgCIMultiplier = Math.abs(qnorm(alpha / 2));
+      }
+
+      const sgCIL = sgResult.mu - sgCIMultiplier * sgResult.se;
+      const sgCIU = sgResult.mu + sgCIMultiplier * sgResult.se;
+
+      subgroupResults[sg] = {
+        ...sgResult,
+        pooledProp: backTransform(sgResult.mu, transformMethod, sgNHarm),
+        ciLower: backTransform(sgCIL, transformMethod, sgNHarm),
+        ciUpper: backTransform(sgCIU, transformMethod, sgNHarm),
+        studies: sgStudies,
+        nHarm: sgNHarm
+      };
+    });
+
+    // Between-subgroup Q test
+    const sgKeys = Object.keys(subgroupResults);
+    const wSG = sgKeys.map(k => 1 / (subgroupResults[k].se * subgroupResults[k].se));
+    const sumWSG = wSG.reduce((a, b) => a + b, 0);
+    const muOverall = wSG.reduce((s, w, i) => s + w * subgroupResults[sgKeys[i]].mu, 0) / sumWSG;
+    const Qbetween = wSG.reduce((s, w, i) => s + w * Math.pow(subgroupResults[sgKeys[i]].mu - muOverall, 2), 0);
+    const dfBetween = sgKeys.length - 1;
+    const QbetweenP = 1 - chiSqCDF(Qbetween, dfBetween);
+
+    subgroupResults._between = { Q: Qbetween, df: dfBetween, p: QbetweenP };
+  }
+
+  // Store results
+  lastResults = {
+    studies: studyResults,
+    pooledProp, pooledCILower, pooledCIUpper,
+    piPropLower, piPropUpper, piMessage,
+    result, transformMethod, poolMethod,
+    subgroupResults,
+    useHKSJ, usePI
+  };
+
+  // Render
+  renderResults(lastResults);
+  document.getElementById('resultsPanel').style.display = '';
+  switchTab('forest');
+}
+
+// ============================================================
+// RENDERING
+// ============================================================
+
+function renderResults(r) {
+  renderForestPlot(r);
+  renderSummary(r);
+  renderFunnelPlot(r);
+
+  if (r.subgroupResults) {
+    document.getElementById('subgroupTab').style.display = '';
+    renderSubgroups(r);
+  } else {
+    document.getElementById('subgroupTab').style.display = 'none';
+  }
+}
+
+function fmt(x, d) {
+  if (x === null || x === undefined || isNaN(x)) return 'N/A';
+  return x.toFixed(d);
+}
+
+function renderForestPlot(r) {
+  const studies = r.studies;
+  const k = studies.length;
+  const rowH = 28;
+  const topMargin = 40;
+  const bottomMargin = 80;
+  const leftMargin = 220;
+  const rightMargin = 240;
+  const plotW = 400;
+  const svgW = leftMargin + plotW + rightMargin;
+  const svgH = topMargin + k * rowH + bottomMargin;
+
+  // Scale: 0 to 1 (proportion)
+  const xMin = 0, xMax = 1;
+  const xScale = (v) => leftMargin + ((v - xMin) / (xMax - xMin)) * plotW;
+
+  let svg = `<svg id="forestSVG" xmlns="http://www.w3.org/2000/svg" width="${svgW}" height="${svgH}" viewBox="0 0 ${svgW} ${svgH}" style="background:transparent;font-family:'Segoe UI',system-ui,sans-serif">`;
+
+  // Grid lines
+  for (let tick = 0; tick <= 1; tick += 0.1) {
+    const x = xScale(tick);
+    svg += `<line x1="${x}" y1="${topMargin}" x2="${x}" y2="${topMargin + k * rowH + 10}" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>`;
+    svg += `<text x="${x}" y="${topMargin + k * rowH + 25}" text-anchor="middle" fill="#94a3b8" font-size="10">${tick.toFixed(1)}</text>`;
+  }
+
+  // Header
+  svg += `<text x="10" y="${topMargin - 10}" fill="#94a3b8" font-size="11" font-weight="600">Study</text>`;
+  svg += `<text x="${leftMargin + plotW / 2}" y="${topMargin - 10}" text-anchor="middle" fill="#94a3b8" font-size="11" font-weight="600">Proportion</text>`;
+  svg += `<text x="${leftMargin + plotW + 10}" y="${topMargin - 10}" fill="#94a3b8" font-size="11" font-weight="600">Events/Total</text>`;
+  svg += `<text x="${leftMargin + plotW + 130}" y="${topMargin - 10}" fill="#94a3b8" font-size="11" font-weight="600">Prop [95% CI]</text>`;
+
+  // Max weight for sizing
+  const maxWeight = Math.max(...studies.map(s => s.weight));
+
+  // Study rows
+  studies.forEach((s, i) => {
+    const y = topMargin + i * rowH + rowH / 2;
+    const prop = s.proportion;
+
+    // Study label
+    svg += `<text x="10" y="${y + 4}" fill="#e2e8f0" font-size="11">${escXml(s.study)}</text>`;
+
+    // CI line
+    const ciL = Math.max(0, s.ciLower);
+    const ciU = Math.min(1, s.ciUpper);
+    svg += `<line x1="${xScale(ciL)}" y1="${y}" x2="${xScale(ciU)}" y2="${y}" stroke="#818cf8" stroke-width="1.5"/>`;
+
+    // Square (size proportional to weight)
+    const sqSize = 4 + (s.weight / maxWeight) * 8;
+    svg += `<rect x="${xScale(prop) - sqSize / 2}" y="${y - sqSize / 2}" width="${sqSize}" height="${sqSize}" fill="#6366f1" rx="1"/>`;
+
+    // Right side info
+    svg += `<text x="${leftMargin + plotW + 10}" y="${y + 4}" fill="#e2e8f0" font-size="10" font-family="Consolas,monospace">${s.events}/${s.total}</text>`;
+    svg += `<text x="${leftMargin + plotW + 130}" y="${y + 4}" fill="#e2e8f0" font-size="10" font-family="Consolas,monospace">${fmt(prop, 3)} [${fmt(ciL, 3)}, ${fmt(ciU, 3)}]</text>`;
+  });
+
+  // Summary diamond
+  const diamondY = topMargin + k * rowH + 20;
+  const diamondCenterX = xScale(r.pooledProp);
+  const diamondLeftX = xScale(Math.max(0, r.pooledCILower));
+  const diamondRightX = xScale(Math.min(1, r.pooledCIUpper));
+  const dH = 8;
+
+  svg += `<polygon points="${diamondLeftX},${diamondY} ${diamondCenterX},${diamondY - dH} ${diamondRightX},${diamondY} ${diamondCenterX},${diamondY + dH}" fill="#22c55e" opacity="0.8"/>`;
+  svg += `<text x="10" y="${diamondY + 4}" fill="#22c55e" font-size="11" font-weight="600">Summary (RE)</text>`;
+  svg += `<text x="${leftMargin + plotW + 130}" y="${diamondY + 4}" fill="#22c55e" font-size="10" font-family="Consolas,monospace">${fmt(r.pooledProp, 3)} [${fmt(r.pooledCILower, 3)}, ${fmt(r.pooledCIUpper, 3)}]</text>`;
+
+  // PI dashed line
+  if (r.piPropLower !== null && r.piPropUpper !== null) {
+    const piL = xScale(Math.max(0, r.piPropLower));
+    const piR = xScale(Math.min(1, r.piPropUpper));
+    svg += `<line x1="${piL}" y1="${diamondY + 15}" x2="${piR}" y2="${diamondY + 15}" stroke="#f59e0b" stroke-width="2" stroke-dasharray="5,3" class="pi-line"/>`;
+    svg += `<text x="10" y="${diamondY + 19}" fill="#f59e0b" font-size="10">PI: ${fmt(r.piPropLower, 3)} to ${fmt(r.piPropUpper, 3)}</text>`;
+  } else if (r.piMessage) {
+    svg += `<text x="10" y="${diamondY + 19}" fill="#f59e0b" font-size="10">${r.piMessage}</text>`;
+  }
+
+  // Axis label
+  svg += `<text x="${leftMargin + plotW / 2}" y="${svgH - 5}" text-anchor="middle" fill="#94a3b8" font-size="11">Proportion</text>`;
+
+  svg += `</svg>`;
+  document.getElementById('forestPlot').innerHTML = svg;
+}
+
+function renderSummary(r) {
+  const res = r.result;
+  let html = '<h3>Pooled Estimate</h3>';
+  html += '<table class="summary-table">';
+  html += `<tr><th>Pooled Proportion</th><td>${fmt(r.pooledProp, 4)}</td></tr>`;
+  html += `<tr><th>95% CI</th><td>[${fmt(r.pooledCILower, 4)}, ${fmt(r.pooledCIUpper, 4)}]</td></tr>`;
+  if (r.piPropLower !== null) {
+    html += `<tr><th>95% PI</th><td>[${fmt(r.piPropLower, 4)}, ${fmt(r.piPropUpper, 4)}]</td></tr>`;
+  } else if (r.piMessage) {
+    html += `<tr><th>95% PI</th><td>${r.piMessage}</td></tr>`;
+  }
+  html += `<tr><th>Method</th><td>${r.poolMethod}${r.useHKSJ ? ' + HKSJ' : ''}</td></tr>`;
+  html += `<tr><th>Transform</th><td>${r.transformMethod === 'FT' ? 'Freeman-Tukey' : r.transformMethod === 'logit' ? 'Logit' : 'Raw'}</td></tr>`;
+  html += '</table>';
+
+  html += '<h3 style="margin-top:1rem">Heterogeneity</h3>';
+  html += '<table class="summary-table">';
+  html += `<tr><th>Q</th><td id="summaryQ">${fmt(res.Q, 2)}</td></tr>`;
+  html += `<tr><th>Q p-value</th><td>${fmt(res.Qp, 4)}</td></tr>`;
+  html += `<tr><th>I<sup>2</sup></th><td id="summaryI2">${fmt(res.I2, 1)}%</td></tr>`;
+  html += `<tr><th>tau<sup>2</sup></th><td id="summaryTau2">${fmt(res.tau2, 6)}</td></tr>`;
+  html += `<tr><th>k (studies)</th><td>${res.k}</td></tr>`;
+  html += `<tr><th>Total N</th><td>${r.studies.reduce((s, st) => s + st.total, 0)}</td></tr>`;
+  html += '</table>';
+
+  html += '<h3 style="margin-top:1rem">Individual Studies</h3>';
+  html += '<table class="study-table">';
+  html += '<tr><th>Study</th><th>Events</th><th>Total</th><th>Prop</th><th>95% CI</th><th>Weight</th></tr>';
+  r.studies.forEach(s => {
+    html += `<tr><td>${escHtml(s.study)}</td><td>${s.events}</td><td>${s.total}</td><td>${fmt(s.proportion, 4)}</td><td>[${fmt(s.ciLower, 4)}, ${fmt(s.ciUpper, 4)}]</td><td>${fmt(s.weight, 1)}%</td></tr>`;
+  });
+  html += '</table>';
+
+  document.getElementById('summaryContent').innerHTML = html;
+}
+
+function renderFunnelPlot(r) {
+  const studies = r.studies;
+  const k = studies.length;
+  const margin = { top: 40, right: 40, bottom: 50, left: 60 };
+  const w = 500, h = 350;
+  const svgW = w + margin.left + margin.right;
+  const svgH = h + margin.top + margin.bottom;
+
+  // Use transformed values for funnel
+  const effects = studies.map(s => s.yi);
+  const ses = studies.map(s => s.se);
+  const pooled = r.result.mu;
+
+  const maxSE = Math.max(...ses) * 1.2;
+  const minEffect = Math.min(...effects, pooled) - 0.3;
+  const maxEffect = Math.max(...effects, pooled) + 0.3;
+
+  const xScale = (v) => margin.left + ((v - minEffect) / (maxEffect - minEffect)) * w;
+  const yScale = (se) => margin.top + (se / maxSE) * h;
+
+  let svg = `<svg id="funnelSVG" xmlns="http://www.w3.org/2000/svg" width="${svgW}" height="${svgH}" viewBox="0 0 ${svgW} ${svgH}" style="background:transparent;font-family:'Segoe UI',system-ui,sans-serif">`;
+
+  // Pseudo 95% CI funnel
+  const nSteps = 50;
+  for (let i = 0; i <= nSteps; i++) {
+    const se = (i / nSteps) * maxSE;
+    const ciHalf = 1.96 * se;
+    const left = xScale(pooled - ciHalf);
+    const right = xScale(pooled + ciHalf);
+    const y = yScale(se);
+    if (i === 0) continue;
+    const prevSE = ((i - 1) / nSteps) * maxSE;
+    const prevHalf = 1.96 * prevSE;
+    svg += `<polygon points="${xScale(pooled - prevHalf)},${yScale(prevSE)} ${xScale(pooled + prevHalf)},${yScale(prevSE)} ${right},${y} ${left},${y}" fill="rgba(255,255,255,0.03)" stroke="none"/>`;
+  }
+
+  // Funnel lines
+  svg += `<line x1="${xScale(pooled)}" y1="${yScale(0)}" x2="${xScale(pooled - 1.96 * maxSE)}" y2="${yScale(maxSE)}" stroke="rgba(255,255,255,0.15)" stroke-width="1" stroke-dasharray="4,3"/>`;
+  svg += `<line x1="${xScale(pooled)}" y1="${yScale(0)}" x2="${xScale(pooled + 1.96 * maxSE)}" y2="${yScale(maxSE)}" stroke="rgba(255,255,255,0.15)" stroke-width="1" stroke-dasharray="4,3"/>`;
+
+  // Center line
+  svg += `<line x1="${xScale(pooled)}" y1="${yScale(0)}" x2="${xScale(pooled)}" y2="${yScale(maxSE)}" stroke="rgba(255,255,255,0.2)" stroke-width="1"/>`;
+
+  // Points
+  studies.forEach((s, i) => {
+    svg += `<circle cx="${xScale(effects[i])}" cy="${yScale(ses[i])}" r="4" fill="#6366f1" stroke="#818cf8" stroke-width="1" opacity="0.9"/>`;
+  });
+
+  // Axes
+  svg += `<line x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${margin.top + h}" stroke="rgba(255,255,255,0.2)"/>`;
+  svg += `<line x1="${margin.left}" y1="${margin.top}" x2="${margin.left + w}" y2="${margin.top}" stroke="rgba(255,255,255,0.2)"/>`;
+
+  // Y-axis (SE, inverted: 0 at top)
+  for (let i = 0; i <= 4; i++) {
+    const se = (i / 4) * maxSE;
+    const y = yScale(se);
+    svg += `<text x="${margin.left - 8}" y="${y + 4}" text-anchor="end" fill="#94a3b8" font-size="10">${se.toFixed(2)}</text>`;
+    svg += `<line x1="${margin.left}" y1="${y}" x2="${margin.left + w}" y2="${y}" stroke="rgba(255,255,255,0.05)"/>`;
+  }
+
+  // X-axis ticks
+  const nTicks = 5;
+  for (let i = 0; i <= nTicks; i++) {
+    const v = minEffect + (i / nTicks) * (maxEffect - minEffect);
+    const x = xScale(v);
+    svg += `<text x="${x}" y="${margin.top + h + 20}" text-anchor="middle" fill="#94a3b8" font-size="10">${v.toFixed(2)}</text>`;
+  }
+
+  // Labels
+  svg += `<text x="${margin.left + w / 2}" y="${margin.top + h + 40}" text-anchor="middle" fill="#94a3b8" font-size="11">Effect (transformed)</text>`;
+  svg += `<text x="${15}" y="${margin.top + h / 2}" text-anchor="middle" fill="#94a3b8" font-size="11" transform="rotate(-90,15,${margin.top + h / 2})">Standard Error</text>`;
+  svg += `<text x="${margin.left + w / 2}" y="${margin.top - 15}" text-anchor="middle" fill="#e2e8f0" font-size="12" font-weight="600">Funnel Plot</text>`;
+
+  svg += `</svg>`;
+  document.getElementById('funnelPlot').innerHTML = svg;
+}
+
+function renderSubgroups(r) {
+  if (!r.subgroupResults) return;
+  let html = '<h3>Subgroup Analysis</h3>';
+
+  const groups = Object.keys(r.subgroupResults).filter(k => k !== '_between');
+  groups.forEach(g => {
+    const sg = r.subgroupResults[g];
+    html += `<h3 style="margin-top:0.8rem;color:var(--cyan)">${escHtml(g)} (k=${sg.k})</h3>`;
+    html += '<table class="summary-table">';
+    html += `<tr><th>Pooled Proportion</th><td>${fmt(sg.pooledProp, 4)}</td></tr>`;
+    html += `<tr><th>95% CI</th><td>[${fmt(sg.ciLower, 4)}, ${fmt(sg.ciUpper, 4)}]</td></tr>`;
+    html += `<tr><th>I<sup>2</sup></th><td>${fmt(sg.I2, 1)}%</td></tr>`;
+    html += `<tr><th>tau<sup>2</sup></th><td>${fmt(sg.tau2, 6)}</td></tr>`;
+    html += '</table>';
+  });
+
+  if (r.subgroupResults._between) {
+    const b = r.subgroupResults._between;
+    html += '<h3 style="margin-top:1rem;color:var(--orange)">Between-Subgroup Test</h3>';
+    html += '<table class="summary-table">';
+    html += `<tr><th>Q<sub>between</sub></th><td id="subgroupQBetween">${fmt(b.Q, 2)}</td></tr>`;
+    html += `<tr><th>df</th><td>${b.df}</td></tr>`;
+    html += `<tr><th>p-value</th><td>${fmt(b.p, 4)}</td></tr>`;
+    html += '</table>';
+  }
+
+  document.getElementById('subgroupContent').innerHTML = html;
+}
+
+// --- Export ---
+function exportCSV() {
+  if (!lastResults) { showError('Run analysis first.'); return; }
+  const r = lastResults;
+  let csv = 'Study,Events,Total,Proportion,CI_Lower,CI_Upper,Weight\n';
+  r.studies.forEach(s => {
+    csv += `"${s.study}",${s.events},${s.total},${s.proportion.toFixed(4)},${s.ciLower.toFixed(4)},${s.ciUpper.toFixed(4)},${s.weight.toFixed(1)}\n`;
+  });
+  csv += `\nPooled,,, ${r.pooledProp.toFixed(4)},${r.pooledCILower.toFixed(4)},${r.pooledCIUpper.toFixed(4)},\n`;
+  csv += `\nI2,${r.result.I2.toFixed(1)}\ntau2,${r.result.tau2.toFixed(6)}\nQ,${r.result.Q.toFixed(2)}\nQ_pval,${r.result.Qp.toFixed(4)}\n`;
+
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'proportion_ma_results.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function exportForestSVG() {
+  const svgEl = document.getElementById('forestSVG');
+  if (!svgEl) { showError('Run analysis first to generate forest plot.'); return; }
+  const svgData = new XMLSerializer().serializeToString(svgEl);
+  const blob = new Blob([svgData], { type: 'image/svg+xml' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'forest_plot.svg';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// --- Utility ---
+function escXml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function escHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// Initialize with 3 empty manual rows
+addManualRow();
+addManualRow();
+addManualRow();
+</script>
+</body>
+</html>
