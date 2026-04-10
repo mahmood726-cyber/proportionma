@@ -260,6 +260,13 @@ Lee 2019,8,50,Group B
 // ProportionMA — Statistical Engine
 // ============================================================
 
+// --- CSV injection guard ---
+function csvSafe(s) {
+  s = String(s);
+  if (/^[=+@\t\r]/.test(s)) return "'" + s;
+  return s;
+}
+
 // --- State ---
 let useHKSJ = false;
 let usePI = false;
@@ -298,15 +305,19 @@ function hideError() {
   document.getElementById('errorMsg').classList.remove('visible');
 }
 
+function escAttr(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
 function addManualRow(study, events, total, subgroup) {
   const container = document.getElementById('manualRows');
   const row = document.createElement('div');
   row.className = 'manual-row';
   row.innerHTML = `
-    <input type="text" value="${study || ''}" placeholder="Study name">
-    <input type="number" value="${events !== undefined ? events : ''}" placeholder="Events" min="0">
-    <input type="number" value="${total !== undefined ? total : ''}" placeholder="Total" min="1">
-    <input type="text" value="${subgroup || ''}" placeholder="(optional)">
+    <input type="text" value="${escAttr(study || '')}" placeholder="Study name">
+    <input type="number" value="${escAttr(events !== undefined ? events : '')}" placeholder="Events" min="0">
+    <input type="number" value="${escAttr(total !== undefined ? total : '')}" placeholder="Total" min="1">
+    <input type="text" value="${escAttr(subgroup || '')}" placeholder="(optional)">
     <button class="remove-row" onclick="this.parentElement.remove()">&times;</button>
   `;
   container.appendChild(row);
@@ -680,11 +691,10 @@ function regGammaQ(a, x) {
 // ============================================================
 
 function transformStudies(studies, method) {
-  // Check if any zero cell exists
-  const hasZero = studies.some(s => s.events === 0 || s.events === s.total);
+  // Apply 0.5 continuity correction ONLY to studies with x=0 or x=n
   const corrected = studies.map(s => {
     let x = s.events, n = s.total;
-    if (hasZero) {
+    if (s.events === 0 || s.events === s.total) {
       x = x + 0.5;
       n = n + 1;
     }
@@ -699,10 +709,9 @@ function transformStudies(studies, method) {
 
     if (method === 'FT') {
       // Freeman-Tukey double arcsine
-      // Use original n for the transformation (not corrected), but corrected x
-      const nOrig = hasZero ? s.total + 1 : s.total;
-      yi = Math.asin(Math.sqrt(x / (nOrig + 1))) + Math.asin(Math.sqrt((x + 1) / (nOrig + 1)));
-      vi = 1 / (nOrig + 0.5);
+      // Use corrected n (n_corr) which already includes +1 for zero-cell studies
+      yi = Math.asin(Math.sqrt(x / (n + 1))) + Math.asin(Math.sqrt((x + 1) / (n + 1)));
+      vi = 1 / (n + 0.5);
     } else if (method === 'logit') {
       const pClamped = Math.max(1e-10, Math.min(1 - 1e-10, p));
       yi = Math.log(pClamped / (1 - pClamped));
@@ -925,22 +934,28 @@ function runAnalysis() {
   }
 
   // HKSJ adjustment
-  let ciMultiplier, ciDf;
+  let ciMultiplier, ciDf, hksjSE;
   if (useHKSJ && result.k > 1) {
     ciDf = result.k - 1;
     const tVal = Math.abs(qt(alpha / 2, ciDf));
-    const qAdj = Math.sqrt(Math.max(1, result.Q / (result.k - 1)));
-    ciMultiplier = tVal * qAdj;
-    // Adjust SE by the HKSJ factor
-    // HKSJ SE = sqrt(1/k * sum(w_i * (y_i - mu)^2 / (k-1)))
-    // But simpler: multiply standard CI half-width
+    // Proper HKSJ: SE_HKSJ = sqrt( sum(w_i*(y_i - mu)^2) / ((k-1)*sum(w_i)) )
+    // where w_i = 1/(v_i + tau2) are RE weights
+    const wRE = transformed.map(s => 1 / (s.vi + result.tau2));
+    const sumWRE = wRE.reduce((a, b) => a + b, 0);
+    const qRE = wRE.reduce((s, wi, i) => s + wi * Math.pow(transformed[i].yi - result.mu, 2), 0);
+    // HKSJ adjustment factor = qRE / (k-1); apply floor: max(1, ...)
+    const adjFactor = Math.max(1, qRE / (result.k - 1));
+    hksjSE = Math.sqrt(adjFactor / sumWRE);
+    ciMultiplier = tVal;
   } else {
     ciMultiplier = Math.abs(qnorm(alpha / 2));
     ciDf = Infinity;
+    hksjSE = null;
   }
 
-  const ciLower = result.mu - ciMultiplier * result.se;
-  const ciUpper = result.mu + ciMultiplier * result.se;
+  const effectiveSE = hksjSE !== null ? hksjSE : result.se;
+  const ciLower = result.mu - ciMultiplier * effectiveSE;
+  const ciUpper = result.mu + ciMultiplier * effectiveSE;
 
   // Prediction interval
   let piLower = null, piUpper = null, piMessage = '';
@@ -957,8 +972,8 @@ function runAnalysis() {
   }
 
   // Harmonic mean of sample sizes for FT back-transformation
-  const hasZero = studies.some(s => s.events === 0 || s.events === s.total);
-  const denoms = studies.map(s => hasZero ? s.total + 1 : s.total);
+  // Use corrected denominator only for studies that needed zero-cell correction
+  const denoms = studies.map(s => (s.events === 0 || s.events === s.total) ? s.total + 1 : s.total);
   const nHarm = harmonicMean(denoms);
 
   // Back-transform pooled estimate and CI
@@ -996,19 +1011,25 @@ function runAnalysis() {
       const sgStudies = studies.filter(s => s.subgroup === sg);
       const sgTransformed = transformStudies(sgStudies, transformMethod);
       const sgResult = poolMethod === 'REML' ? poolREML(sgTransformed) : poolDL(sgTransformed);
-      const sgDenoms = sgStudies.map(s => hasZero ? s.total + 1 : s.total);
+      const sgDenoms = sgStudies.map(s => (s.events === 0 || s.events === s.total) ? s.total + 1 : s.total);
       const sgNHarm = harmonicMean(sgDenoms);
 
-      let sgCIMultiplier;
+      let sgCIMultiplier, sgEffectiveSE;
       if (useHKSJ && sgResult.k > 1) {
         const tVal = Math.abs(qt(alpha / 2, sgResult.k - 1));
-        sgCIMultiplier = tVal * Math.sqrt(Math.max(1, sgResult.Q / (sgResult.k - 1)));
+        const sgWRE = sgTransformed.map(s => 1 / (s.vi + sgResult.tau2));
+        const sgSumWRE = sgWRE.reduce((a, b) => a + b, 0);
+        const sgQRE = sgWRE.reduce((s, wi, i) => s + wi * Math.pow(sgTransformed[i].yi - sgResult.mu, 2), 0);
+        const sgAdjFactor = Math.max(1, sgQRE / (sgResult.k - 1));
+        sgEffectiveSE = Math.sqrt(sgAdjFactor / sgSumWRE);
+        sgCIMultiplier = tVal;
       } else {
         sgCIMultiplier = Math.abs(qnorm(alpha / 2));
+        sgEffectiveSE = sgResult.se;
       }
 
-      const sgCIL = sgResult.mu - sgCIMultiplier * sgResult.se;
-      const sgCIU = sgResult.mu + sgCIMultiplier * sgResult.se;
+      const sgCIL = sgResult.mu - sgCIMultiplier * sgEffectiveSE;
+      const sgCIU = sgResult.mu + sgCIMultiplier * sgEffectiveSE;
 
       subgroupResults[sg] = {
         ...sgResult,
@@ -1302,7 +1323,7 @@ function exportCSV() {
   const r = lastResults;
   let csv = 'Study,Events,Total,Proportion,CI_Lower,CI_Upper,Weight\n';
   r.studies.forEach(s => {
-    csv += `"${s.study}",${s.events},${s.total},${s.proportion.toFixed(4)},${s.ciLower.toFixed(4)},${s.ciUpper.toFixed(4)},${s.weight.toFixed(1)}\n`;
+    csv += `"${csvSafe(s.study)}",${s.events},${s.total},${s.proportion.toFixed(4)},${s.ciLower.toFixed(4)},${s.ciUpper.toFixed(4)},${s.weight.toFixed(1)}\n`;
   });
   csv += `\nPooled,,, ${r.pooledProp.toFixed(4)},${r.pooledCILower.toFixed(4)},${r.pooledCIUpper.toFixed(4)},\n`;
   csv += `\nI2,${r.result.I2.toFixed(1)}\ntau2,${r.result.tau2.toFixed(6)}\nQ,${r.result.Q.toFixed(2)}\nQ_pval,${r.result.Qp.toFixed(4)}\n`;
