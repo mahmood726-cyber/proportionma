@@ -50,7 +50,7 @@ Lee 2019,8,50,Group B
 ## Testing
 
 ```bash
-cd C:\Models\ProportionMA
+# from the repository root
 python -m pytest test_app.py -v
 ```
 
